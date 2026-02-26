@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { serviceCategories } from '@/data/mockData';
+import { useServiceCategories, useCreateRequest } from '@/hooks/useSupabaseData';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -11,6 +11,9 @@ import { toast } from 'sonner';
 const RequestForm = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { data: categories = [] } = useServiceCategories();
+  const createRequest = useCreateRequest();
+
   const [form, setForm] = useState({
     category: searchParams.get('category') || '',
     startDate: '',
@@ -21,14 +24,29 @@ const RequestForm = () => {
     notes: '',
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.category || !form.startDate || !form.location || !form.duration) {
       toast.error('Please fill all required fields');
       return;
     }
-    toast.success('Request submitted successfully! Our team will review it shortly.');
-    navigate('/customer/requests');
+    const cat = categories.find(c => c.name === form.category);
+    try {
+      await createRequest.mutateAsync({
+        category_name: form.category,
+        category_id: cat?.id,
+        start_date: form.startDate,
+        shift_type: form.shiftType,
+        duration: form.duration,
+        salary_offer: form.salaryOffer ? parseInt(form.salaryOffer) : 0,
+        location: form.location,
+        notes: form.notes,
+      });
+      toast.success('Request submitted successfully!');
+      navigate('/customer/requests');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to submit request');
+    }
   };
 
   const update = (key: string, value: string) => setForm(f => ({ ...f, [key]: value }));
@@ -44,7 +62,7 @@ const RequestForm = () => {
           <Select value={form.category} onValueChange={v => update('category', v)}>
             <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
             <SelectContent>
-              {serviceCategories.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+              {categories.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
@@ -90,9 +108,6 @@ const RequestForm = () => {
             <MapPin className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
             <Input className="pl-10" placeholder="Enter address or area" value={form.location} onChange={e => update('location', e.target.value)} />
           </div>
-          <div className="mt-2 h-32 rounded-lg bg-muted flex items-center justify-center text-sm text-muted-foreground border border-border">
-            <MapPin className="w-4 h-4 mr-2" /> Map view — enable Cloud for live maps
-          </div>
         </div>
 
         <div>
@@ -100,8 +115,8 @@ const RequestForm = () => {
           <Textarea placeholder="Any special requirements..." value={form.notes} onChange={e => update('notes', e.target.value)} rows={3} />
         </div>
 
-        <Button type="submit" className="w-full" size="lg">
-          <Send className="w-4 h-4 mr-2" /> Submit Request
+        <Button type="submit" className="w-full" size="lg" disabled={createRequest.isPending}>
+          <Send className="w-4 h-4 mr-2" /> {createRequest.isPending ? 'Submitting...' : 'Submit Request'}
         </Button>
       </form>
     </div>
