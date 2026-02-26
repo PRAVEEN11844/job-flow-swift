@@ -96,7 +96,7 @@ export const AppLayout = ({ children }: { children: React.ReactNode }) => {
 
         <div className="p-3 border-t border-sidebar-border">
           <button
-            onClick={() => { logout(); navigate('/'); }}
+            onClick={async () => { await logout(); navigate('/'); }}
             className="flex items-center gap-3 px-3 py-2.5 w-full rounded-lg text-sm text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors"
           >
             <LogOut className="w-4.5 h-4.5" />
