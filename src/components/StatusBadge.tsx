@@ -12,12 +12,12 @@ const statusConfig: Record<RequestStatus, { label: string; className: string }> 
 };
 
 interface StatusBadgeProps {
-  status: string;
+  status: RequestStatus;
   className?: string;
 }
 
 export const StatusBadge = ({ status, className }: StatusBadgeProps) => {
-  const config = statusConfig[status as RequestStatus] || { label: status, className: 'bg-muted text-muted-foreground border-border' };
+  const config = statusConfig[status];
   return (
     <span className={cn('inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border', config.className, className)}>
       {status === 'active' && <span className="w-1.5 h-1.5 rounded-full bg-success mr-1.5 animate-pulse-dot" />}

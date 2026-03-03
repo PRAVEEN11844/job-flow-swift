@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useAllRequests, useWorkerProfiles, useUpdateRequestStatus } from '@/hooks/useSupabaseData';
+import { mockRequests, mockWorkers } from '@/data/mockData';
 import { StatusBadge } from '@/components/StatusBadge';
 import { Search, Filter, UserPlus, MapPin, Calendar, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -7,30 +7,28 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
+import { ServiceRequest, RequestStatus } from '@/types';
 
 const RequestsManagement = () => {
-  const { data: requests = [], isLoading } = useAllRequests();
-  const { data: workers = [] } = useWorkerProfiles({ availability: 'available' });
-  const updateStatus = useUpdateRequestStatus();
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [requests, setRequests] = useState<ServiceRequest[]>([...mockRequests]);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [assigningId, setAssigningId] = useState<string | null>(null);
 
   const filtered = requests.filter(r => {
     if (statusFilter !== 'all' && r.status !== statusFilter) return false;
-    if (search && !r.category_name.toLowerCase().includes(search.toLowerCase()) && !r.location.toLowerCase().includes(search.toLowerCase())) return false;
+    if (search && !r.customerName.toLowerCase().includes(search.toLowerCase()) && !r.category.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
 
-  const handleAssign = async (requestId: string, workerId: string) => {
-    const worker = workers.find(w => w.user_id === workerId);
-    try {
-      await updateStatus.mutateAsync({ id: requestId, status: 'worker_assigned', assigned_worker_id: workerId });
-      setAssigningId(null);
-      toast.success('Worker assigned to request');
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to assign worker');
-    }
+  const handleAssign = (requestId: string, workerId: string) => {
+    const worker = mockWorkers.find(w => w.id === workerId);
+    if (!worker) return;
+    setRequests(prev => prev.map(r =>
+      r.id === requestId ? { ...r, status: 'worker_assigned' as RequestStatus, assignedWorkerId: workerId, assignedWorkerName: worker.name } : r
+    ));
+    setAssigningId(null);
+    toast.success(`${worker.name} assigned to request`);
   };
 
   return (
@@ -59,58 +57,58 @@ const RequestsManagement = () => {
         </Select>
       </div>
 
-      {isLoading ? (
-        <div className="text-center py-10 text-muted-foreground">Loading...</div>
-      ) : (
-        <div className="space-y-4">
-          {filtered.map((r, i) => (
-            <motion.div key={r.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
-              className="bg-card rounded-xl p-5 shadow-card border border-border">
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <h3 className="font-semibold">{r.category_name}</h3>
-                  <p className="text-sm text-muted-foreground">#{r.id.slice(0, 8).toUpperCase()}</p>
-                </div>
-                <StatusBadge status={r.status} />
+      <div className="space-y-4">
+        {filtered.map((r, i) => (
+          <motion.div key={r.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
+            className="bg-card rounded-xl p-5 shadow-card border border-border">
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <h3 className="font-semibold">{r.customerName}</h3>
+                <p className="text-sm text-muted-foreground">{r.category} · #{r.id.toUpperCase()}</p>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm text-muted-foreground mb-3">
-                <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" />{r.location}</span>
-                <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" />{r.start_date || 'TBD'}</span>
-                <span className="capitalize">{r.shift_type} · {r.duration}</span>
-                <span>₹{r.salary_offer.toLocaleString()}/mo</span>
-              </div>
+              <StatusBadge status={r.status} />
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm text-muted-foreground mb-3">
+              <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" />{r.location}</span>
+              <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" />{r.startDate}</span>
+              <span className="capitalize">{r.shiftType} · {r.duration}</span>
+              <span>₹{r.salaryOffer.toLocaleString()}/mo</span>
+            </div>
+            {r.assignedWorkerName && (
+              <p className="text-sm mb-3"><span className="text-muted-foreground">Assigned:</span> <span className="font-medium text-primary">{r.assignedWorkerName}</span></p>
+            )}
 
-              {(r.status === 'pending' || r.status === 'admin_reviewing') && (
-                <div>
-                  {assigningId === r.id ? (
-                    <div className="bg-muted rounded-lg p-3 space-y-2">
-                      <p className="text-sm font-medium">Select a worker to assign:</p>
-                      <div className="space-y-1.5">
-                        {workers.map(w => (
-                          <button key={w.id} onClick={() => handleAssign(r.id, w.user_id)}
-                            className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-card transition-colors text-sm text-left">
-                            <span>{(w as any).profiles?.name || 'Worker'} — {w.experience} yrs — ₹{w.expected_salary.toLocaleString()}</span>
-                            <UserPlus className="w-3.5 h-3.5 text-primary" />
-                          </button>
-                        ))}
-                        {workers.length === 0 && <p className="text-xs text-muted-foreground">No available workers</p>}
-                      </div>
-                      <Button variant="ghost" size="sm" onClick={() => setAssigningId(null)}>
-                        <X className="w-3 h-3 mr-1" /> Cancel
-                      </Button>
+            {(r.status === 'pending' || r.status === 'admin_reviewing') && (
+              <div>
+                {assigningId === r.id ? (
+                  <div className="bg-muted rounded-lg p-3 space-y-2">
+                    <p className="text-sm font-medium">Select a worker to assign:</p>
+                    <div className="space-y-1.5">
+                      {mockWorkers.filter(w => w.availability === 'available' && w.category === r.category).map(w => (
+                        <button key={w.id} onClick={() => handleAssign(r.id, w.id)}
+                          className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-card transition-colors text-sm text-left">
+                          <span>{w.name} — {w.experience} yrs — ₹{w.expectedSalary.toLocaleString()}</span>
+                          <UserPlus className="w-3.5 h-3.5 text-primary" />
+                        </button>
+                      ))}
+                      {mockWorkers.filter(w => w.availability === 'available' && w.category === r.category).length === 0 && (
+                        <p className="text-xs text-muted-foreground">No available workers in this category</p>
+                      )}
                     </div>
-                  ) : (
-                    <Button size="sm" onClick={() => setAssigningId(r.id)}>
-                      <UserPlus className="w-4 h-4 mr-2" /> Assign Worker
+                    <Button variant="ghost" size="sm" onClick={() => setAssigningId(null)}>
+                      <X className="w-3 h-3 mr-1" /> Cancel
                     </Button>
-                  )}
-                </div>
-              )}
-            </motion.div>
-          ))}
-          {filtered.length === 0 && <div className="text-center py-10 text-muted-foreground">No requests found</div>}
-        </div>
-      )}
+                  </div>
+                ) : (
+                  <Button size="sm" onClick={() => setAssigningId(r.id)}>
+                    <UserPlus className="w-4 h-4 mr-2" /> Assign Worker
+                  </Button>
+                )}
+              </div>
+            )}
+          </motion.div>
+        ))}
+      </div>
     </div>
   );
 };

@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth, AppRole } from '@/contexts/AuthContext';
-import { Shield, Mail, Lock, ArrowRight, User, Phone } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { UserRole } from '@/types';
+import { Shield, Phone, ArrowRight, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { motion, AnimatePresence } from 'framer-motion';
-import { toast } from 'sonner';
 
-const roles: { value: AppRole; label: string; desc: string }[] = [
+const roles: { value: UserRole; label: string; desc: string }[] = [
   { value: 'customer', label: 'Customer', desc: 'Search & request workers' },
   { value: 'worker', label: 'Worker', desc: 'Accept jobs & track attendance' },
   { value: 'admin', label: 'Admin', desc: 'Manage the entire platform' },
@@ -15,36 +15,20 @@ const roles: { value: AppRole; label: string; desc: string }[] = [
 
 const Login = () => {
   const navigate = useNavigate();
-  const { signIn, signUp } = useAuth();
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
-  const [role, setRole] = useState<AppRole>('customer');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
+  const { login } = useAuth();
+  const [step, setStep] = useState<'role' | 'phone' | 'otp'>('role');
+  const [role, setRole] = useState<UserRole>('customer');
   const [phone, setPhone] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [otp, setOtp] = useState('');
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email || !password) {
-      toast.error('Please enter email and password');
-      return;
-    }
-    setLoading(true);
-    try {
-      if (mode === 'login') {
-        await signIn(email, password);
-        toast.success('Logged in successfully!');
-      } else {
-        if (!name) { toast.error('Please enter your name'); setLoading(false); return; }
-        await signUp(email, password, name, phone, role);
-        toast.success('Account created! Please check your email to verify, then log in.');
-        setMode('login');
-      }
-    } catch (err: any) {
-      toast.error(err.message || 'Authentication failed');
-    } finally {
-      setLoading(false);
+  const handleSendOtp = () => {
+    if (phone.length >= 10) setStep('otp');
+  };
+
+  const handleVerify = () => {
+    if (otp.length >= 4) {
+      login(role, phone);
+      navigate(role === 'admin' ? '/admin' : `/${role}`);
     }
   };
 
@@ -71,68 +55,94 @@ const Login = () => {
             <span className="text-lg font-bold">Hanvika</span>
           </div>
 
-          <h2 className="text-2xl font-bold mb-2">{mode === 'login' ? 'Welcome back' : 'Create account'}</h2>
-          <p className="text-muted-foreground mb-6">
-            {mode === 'login' ? 'Sign in to your account' : 'Select your role and register'}
-          </p>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {mode === 'signup' && (
-              <>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Role</label>
-                  <div className="space-y-2">
-                    {roles.map((r) => (
-                      <button key={r.value} type="button" onClick={() => setRole(r.value)}
-                        className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left ${
-                          role === r.value ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/30'
-                        }`}>
-                        <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                          role === r.value ? 'border-primary' : 'border-muted-foreground'
-                        }`}>
-                          {role === r.value && <div className="w-1.5 h-1.5 rounded-full bg-primary" />}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-xs">{r.label}</p>
-                          <p className="text-xs text-muted-foreground">{r.desc}</p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
+          <AnimatePresence mode="wait">
+            {step === 'role' && (
+              <motion.div key="role" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+                <h2 className="text-2xl font-bold mb-2">Welcome back</h2>
+                <p className="text-muted-foreground mb-6">Select your role to continue</p>
+                <div className="space-y-3 mb-6">
+                  {roles.map((r) => (
+                    <button
+                      key={r.value}
+                      onClick={() => setRole(r.value)}
+                      className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left ${
+                        role === r.value
+                          ? 'border-primary bg-primary/5 shadow-card'
+                          : 'border-border hover:border-primary/30'
+                      }`}
+                    >
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                        role === r.value ? 'border-primary' : 'border-muted-foreground'
+                      }`}>
+                        {role === r.value && <div className="w-2 h-2 rounded-full bg-primary" />}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm">{r.label}</p>
+                        <p className="text-xs text-muted-foreground">{r.desc}</p>
+                      </div>
+                    </button>
+                  ))}
                 </div>
-
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input placeholder="Full name" className="pl-10" value={name} onChange={e => setName(e.target.value)} />
-                </div>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input placeholder="Phone number" className="pl-10" value={phone}
-                    onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))} />
-                </div>
-              </>
+                <Button className="w-full" onClick={() => setStep('phone')}>
+                  Continue <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </motion.div>
             )}
 
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input type="email" placeholder="Email address" className="pl-10" value={email} onChange={e => setEmail(e.target.value)} />
-            </div>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input type="password" placeholder="Password" className="pl-10" value={password} onChange={e => setPassword(e.target.value)} />
-            </div>
+            {step === 'phone' && (
+              <motion.div key="phone" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+                <h2 className="text-2xl font-bold mb-2">Enter your number</h2>
+                <p className="text-muted-foreground mb-6">We'll send an OTP to verify</p>
+                <div className="relative mb-4">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    type="tel"
+                    placeholder="Enter mobile number"
+                    className="pl-10"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    maxLength={10}
+                  />
+                </div>
+                <Button className="w-full" onClick={handleSendOtp} disabled={phone.length < 10}>
+                  Send OTP <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+                <button className="w-full text-center text-sm text-muted-foreground mt-4 hover:text-foreground" onClick={() => setStep('role')}>
+                  ← Back to role selection
+                </button>
+              </motion.div>
+            )}
 
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Please wait...' : mode === 'login' ? 'Sign In' : 'Create Account'}
-              <ArrowRight className="w-4 h-4 ml-2" />
-            </Button>
-          </form>
+            {step === 'otp' && (
+              <motion.div key="otp" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+                <h2 className="text-2xl font-bold mb-2">Verify OTP</h2>
+                <p className="text-muted-foreground mb-6">Enter the 4-digit code sent to +91 {phone}</p>
+                <div className="relative mb-4">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    type="text"
+                    placeholder="Enter OTP"
+                    className="pl-10 text-center text-lg tracking-[0.5em]"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                    maxLength={4}
+                  />
+                </div>
+                <Button className="w-full" onClick={handleVerify} disabled={otp.length < 4}>
+                  Verify & Login <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+                <p className="text-center text-sm text-muted-foreground mt-4">
+                  Didn't receive? <button className="text-primary font-medium hover:underline">Resend OTP</button>
+                </p>
+                <button className="w-full text-center text-sm text-muted-foreground mt-2 hover:text-foreground" onClick={() => setStep('phone')}>
+                  ← Change number
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-          <p className="text-sm text-center mt-6 text-muted-foreground">
-            {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
-            <button className="text-primary font-medium hover:underline" onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}>
-              {mode === 'login' ? 'Sign up' : 'Sign in'}
-            </button>
+          <p className="text-xs text-muted-foreground text-center mt-8">
+            Demo: Enter any 10-digit number, then any 4-digit OTP
           </p>
         </div>
       </div>
